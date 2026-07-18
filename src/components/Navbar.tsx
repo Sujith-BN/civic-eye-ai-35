@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { MapPin, LayoutDashboard, Camera, Home, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { GoogleLoginButton } from "@/components/GoogleLoginButton";
 
 const links = [
   { to: "/", label: "Home", icon: Home },
@@ -41,32 +42,43 @@ export function Navbar() {
         </nav>
 
         <div className="hidden md:flex items-center gap-2">
-          <Link to="/report">
-            <Button size="sm" className="bg-gradient-hero hover:opacity-90 shadow-elegant">Report Issue</Button>
-          </Link>
-        </div>
+          <GoogleLoginButton />
 
+          <Link to="/report">
+            <Button
+              size="sm"
+              className="bg-gradient-hero hover:opacity-90 shadow-elegant"
+            >
+              Report Issue
+            </Button>
+          </Link>
+      </div>
         <button className="md:hidden p-2" onClick={() => setOpen(!open)} aria-label="Menu">
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
-      {open && (
-        <div className="md:hidden border-t border-border/60 bg-background">
-          <nav className="flex flex-col p-3 gap-1">
-            {links.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground hover:bg-secondary"
-              >
-                <l.icon className="h-4 w-4" /> {l.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      )}
+     {open && (
+  <div className="md:hidden border-t border-border/60 bg-background">
+    <nav className="flex flex-col p-3 gap-1">
+      {links.map((l) => (
+        <Link
+          key={l.to}
+          to={l.to}
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground hover:bg-secondary"
+        >
+          <l.icon className="h-4 w-4" />
+          {l.label}
+        </Link>
+      ))}
+
+      <div className="mt-3 border-t border-border/60 pt-3">
+        <GoogleLoginButton />
+      </div>
+    </nav>
+  </div>
+)}
     </header>
   );
 }

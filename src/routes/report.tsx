@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { uploadCivicImage } from "@/lib/upload-civic-image";
 import { useReportDraft } from "@/context/ReportDraftContext";
+import { supabase } from "@/lib/supabase-client";
 import {
   useState,
   useRef,
@@ -221,21 +222,52 @@ function ReportPage() {
 
   const cleanLocation = location.trim();
 
-if (cleanLocation.length < 8) {
-  toast.error("Please enter proper street, area, or landmark details");
-  return;
-}
+  if (cleanLocation.length < 8) {
+    toast.error(
+      "Please enter proper street, area, or landmark details",
+    );
+    return;
+  }
 
-if (latitude === null || longitude === null) {
-  toast.error("Please choose the exact issue location using GPS or the map");
-  return;
-}
+  if (latitude === null || longitude === null) {
+    toast.error(
+      "Please choose the exact issue location using GPS or the map",
+    );
+    return;
+  }
+
+  /*
+   * Check whether the citizen is signed in.
+   */
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    console.error("Session check failed:", sessionError);
+
+    toast.error(
+      "Unable to verify your login. Please try again.",
+    );
+
+    return;
+  }
+
+  if (!session?.access_token) {
+    toast.error(
+      "Please sign in with Google before submitting your report.",
+    );
+
+    return;
+  }
+
   setSubmitting(true);
 
   try {
     /*
      * STEP 1:
-     * Upload evidence image to Supabase Storage.
+     * Upload evidence image.
      */
     const formData = new FormData();
 
@@ -247,52 +279,52 @@ if (latitude === null || longitude === null) {
 
     /*
      * STEP 2:
-     * Save report + permanent image URL.
+     * Submit report with the authenticated session token.
+     *
+     * The server verifies this token with Supabase
+     * before using the user's UUID.
      */
     const result = await submitReport({
       data: {
+        accessToken: session.access_token,
+
         imageUrl: uploadResult.imageUrl,
 
         location: cleanLocation,
 
-        latitude:
-          latitude ?? undefined,
+        latitude,
+        longitude,
 
-        longitude:
-          longitude ?? undefined,
+        description: desc || undefined,
 
-        description:
-          desc || undefined,
+        detectedIssue: analysis.issue,
 
-        detectedIssue:
-          analysis.issue,
+        category: analysis.category,
 
-        category:
-          analysis.category,
+        severity: analysis.severity.toUpperCase() as
+          | "LOW"
+          | "MEDIUM"
+          | "HIGH"
+          | "CRITICAL",
 
-        severity:
-          analysis.severity.toUpperCase() as
-            | "LOW"
-            | "MEDIUM"
-            | "HIGH"
-            | "CRITICAL",
+        safetyRisk: analysis.safetyRisk,
 
-        safetyRisk:
-          analysis.safetyRisk,
+        department: analysis.department,
 
-        department:
-          analysis.department,
+        confidence: analysis.confidence,
 
-        confidence:
-          analysis.confidence,
-
-        aiReasoning:
-          analysis.reasoning,
+        aiReasoning: analysis.reasoning,
       },
     });
 
-   toast.success("Report submitted successfully!");
-  clearDraft();
+    console.log(
+      "Report submitted:",
+      result.reportId,
+    );
+
+    toast.success("Report submitted successfully!");
+
+    clearDraft();
   } catch (error) {
     console.error(
       "Report submission failed:",
@@ -308,7 +340,6 @@ if (latitude === null || longitude === null) {
     setSubmitting(false);
   }
 };
-
   const complaintEn = analysis
     ? `To: The Commissioner, ${analysis.department}\n\nSubject: Urgent — ${analysis.issue} at ${location || "reported location"}\n\nDear Sir/Madam,\n\nI wish to bring to your urgent attention a civic issue observed at ${location || "the reported location"}. AI-assisted analysis of photographic evidence has classified this as: ${analysis.issue} (Severity: ${analysis.severity}).\n\nSafety impact: ${analysis.safetyRisk}\n\nAI reasoning: ${analysis.reasoning}\n\n${desc ? `Citizen note: ${desc}\n\n` : ""}I request immediate inspection and corrective action by the responsible department. Please treat this as a matter of public safety.\n\nSubmitted via FixMyCity Civic Intelligence Platform.`
     : "";
