@@ -1,9 +1,11 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { ClientOnly } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
+import { LocationPicker } from "./LocationPicker";
 
 type LocationPickerLoaderProps = {
   latitude: number | null;
   longitude: number | null;
+
   onConfirm: (
     latitude: number,
     longitude: number,
@@ -11,52 +13,30 @@ type LocationPickerLoaderProps = {
   ) => void;
 };
 
-const LocationPicker = lazy(() =>
-  import("@/components/LocationPicker.client").then((module) => ({
-    default: module.LocationPicker,
-  })),
-);
+function LoadingMap() {
+  return (
+    <div className="rounded-xl border p-8 text-center">
+      <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+
+      <p className="mt-2 text-sm text-muted-foreground">
+        Loading map...
+      </p>
+    </div>
+  );
+}
 
 export function LocationPickerLoader({
   latitude,
   longitude,
   onConfirm,
 }: LocationPickerLoaderProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return (
-      <div className="rounded-xl border p-8 text-center">
-        <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-
-        <p className="mt-2 text-sm text-muted-foreground">
-          Loading map...
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <Suspense
-      fallback={
-        <div className="rounded-xl border p-8 text-center">
-          <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-
-          <p className="mt-2 text-sm text-muted-foreground">
-            Loading map...
-          </p>
-        </div>
-      }
-    >
+    <ClientOnly fallback={<LoadingMap />}>
       <LocationPicker
         latitude={latitude}
         longitude={longitude}
         onConfirm={onConfirm}
       />
-    </Suspense>
+    </ClientOnly>
   );
 }

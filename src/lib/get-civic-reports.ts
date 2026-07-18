@@ -16,19 +16,7 @@ export const getCivicReports = createServerFn({
         ascending: false,
       });
 
-  console.log("🔥 SUPABASE FETCH DEBUG:", {
-    status,
-    statusText,
-    count,
-    rowsReturned: data?.length,
-    error: error
-      ? {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-        }
-      : null,
-  });
+ 
 
   if (error) {
     throw new Error(
