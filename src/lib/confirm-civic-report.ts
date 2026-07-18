@@ -1,55 +1,36 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { getSupabaseServerClient } from "@/lib/supabase-server";
+import {
+  getAuthenticatedSupabaseServerClient,
+  getSupabaseServerClient,
+} from "@/lib/supabase-server";
 
 const ConfirmReportSchema = z.object({
+  accessToken: z.string().min(1, "Please sign in to confirm an issue."),
   reportId: z.number().int().positive(),
 });
 
-export const confirmCivicReport = createServerFn({
-  method: "POST",
-})
+export const confirmCivicReport = createServerFn({ method: "POST" })
   .validator((data) => ConfirmReportSchema.parse(data))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
+    const { data: auth, error: authError } = await supabase.auth.getUser(data.accessToken);
 
-    // Get current confirmation count
-    const { data: report, error: readError } = await supabase
-      .from("civic_reports")
-      .select("id, confirmations")
-      .eq("id", data.reportId)
-      .single();
-
-    if (readError || !report) {
-      console.error("Failed to find civic report:", readError);
-
-      throw new Error("Unable to find this civic report.");
+    if (authError || !auth.user) {
+      throw new Error("Please sign in to confirm an issue.");
     }
 
-    const newConfirmations =
-      (report.confirmations ?? 0) + 1;
+    const authenticatedSupabase = getAuthenticatedSupabaseServerClient(data.accessToken);
+    const { data: result, error } = await authenticatedSupabase.rpc("confirm_civic_report", {
+      p_report_id: data.reportId,
+    });
 
-    // Update confirmation count
-    const { data: updated, error: updateError } = await supabase
-      .from("civic_reports")
-      .update({
-        confirmations: newConfirmations,
-      })
-      .eq("id", data.reportId)
-      .select("id, confirmations")
-      .single();
-
-    if (updateError || !updated) {
-      console.error(
-        "Failed to update confirmations:",
-        updateError,
-      );
-
-      throw new Error(
-        "Unable to confirm this report.",
-      );
+    if (error) {
+      if (error.code === "23505") throw new Error("You already confirmed this issue.");
+      throw new Error(error.message || "Unable to confirm this report.");
     }
 
-    return updated;
+    const confirmation = Array.isArray(result) ? result[0] : result;
+    return { confirmations: confirmation?.confirmations ?? 0 };
   });

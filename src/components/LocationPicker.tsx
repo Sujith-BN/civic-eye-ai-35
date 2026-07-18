@@ -106,12 +106,12 @@ export function LocationPicker({
   onConfirm,
 }: LocationPickerProps) {
   /*
-   * Bhadravati is only the initial fallback map view.
-   * If GPS coordinates exist, those coordinates are used instead.
+   * India is the neutral initial fallback map view. If GPS coordinates
+   * exist, those coordinates are used instead.
    */
   const defaultPosition: Position = {
-    lat: latitude ?? 13.8485,
-    lng: longitude ?? 75.705,
+    lat: latitude ?? 20.5937,
+    lng: longitude ?? 78.9629,
   };
 
   const [position, setPosition] =
@@ -280,7 +280,7 @@ export function LocationPicker({
               void searchLocation();
             }
           }}
-          placeholder="Search Bhadravati, street, landmark..."
+          placeholder="Search a city, street, or landmark..."
         />
 
         <Button

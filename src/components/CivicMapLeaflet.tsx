@@ -160,7 +160,7 @@ export function CivicMap({
 
               <div>
                 Status:{" "}
-                {report.status || "Reported"}
+                {formatStatus(report.status)}
               </div>
 
               {report.location && (
@@ -179,4 +179,8 @@ export function CivicMap({
       ))}
     </MapContainer>
   );
+}
+
+function formatStatus(status: string | null) {
+  return (status || "REPORTED").replace(/_/g, " ");
 }

@@ -15,6 +15,9 @@ import {
 import { getCivicReports } from "@/lib/get-civic-reports";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase-client";
+import { updateCivicReportStatus } from "@/lib/update-civic-report-status";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -82,6 +85,8 @@ function DashboardPage() {
 
   const [error, setError] =
     useState<string | null>(null);
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   /* =====================================================
      LOAD REPORTS
@@ -128,6 +133,28 @@ function DashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user.app_metadata?.civic_admin === true) {
+        setAdminToken(data.session.access_token);
+      }
+    });
+  }, []);
+
+  const changeStatus = async (reportId: number, status: "REPORTED" | "IN_PROGRESS" | "RESOLVED") => {
+    if (!adminToken) return;
+    try {
+      setUpdatingId(reportId);
+      const updated = await updateCivicReportStatus({ data: { accessToken: adminToken, reportId, status } });
+      setReports((current) => current.map((report) => report.id === updated.id ? { ...report, status: updated.status } : report));
+      toast.success("Report status updated.");
+    } catch (updateError) {
+      toast.error(updateError instanceof Error ? updateError.message : "Unable to update report status.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   /* =====================================================
      KPI CALCULATIONS
   ===================================================== */
@@ -146,8 +173,8 @@ function DashboardPage() {
     () =>
       reports.filter(
         (report) =>
-          report.severity?.toUpperCase() ===
-          "CRITICAL",
+          report.severity?.toUpperCase() === "CRITICAL" &&
+          normalizeStatus(report.status) !== "resolved",
       ).length,
     [reports],
   );
@@ -754,6 +781,20 @@ function DashboardPage() {
                           }
                         />
 
+                        {adminToken && (
+                          <select
+                            aria-label={`Update status for report ${report.id}`}
+                            value={toStatusValue(report.status)}
+                            disabled={updatingId === report.id}
+                            onChange={(event) => void changeStatus(report.id, event.target.value as "REPORTED" | "IN_PROGRESS" | "RESOLVED")}
+                            className="rounded-full border border-border bg-background px-2 py-1 text-[10px] font-semibold sm:text-xs"
+                          >
+                            <option value="REPORTED">REPORTED</option>
+                            <option value="IN_PROGRESS">IN PROGRESS</option>
+                            <option value="RESOLVED">RESOLVED</option>
+                          </select>
+                        )}
+
                       </div>
 
                     </div>
@@ -1201,7 +1242,13 @@ function normalizeStatus(
     status || "Reported"
   )
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/_/g, " ");
+}
+
+function toStatusValue(status: string | null): "REPORTED" | "IN_PROGRESS" | "RESOLVED" {
+  const normalized = normalizeStatus(status).replace(/ /g, "_").toUpperCase();
+  return normalized === "IN_PROGRESS" || normalized === "RESOLVED" ? normalized : "REPORTED";
 }
 
 function calculatePriorityScore(

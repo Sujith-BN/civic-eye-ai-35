@@ -70,7 +70,8 @@ function Landing() {
 
     const critical = reports.filter(
       (report) =>
-        report.severity?.trim().toUpperCase() === "CRITICAL",
+        report.severity?.trim().toUpperCase() === "CRITICAL" &&
+        normalizeStatus(report.status) !== "resolved",
     ).length;
 
     const resolved = reports.filter(
@@ -381,5 +382,6 @@ function Landing() {
 function normalizeStatus(status: string | null) {
   return (status || "REPORTED")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/_/g, " ");
 }

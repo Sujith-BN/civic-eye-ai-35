@@ -12,9 +12,11 @@ import { toast } from "sonner";
 
 import { getCivicReports } from "@/lib/get-civic-reports";
 import { confirmCivicReport } from "@/lib/confirm-civic-report";
+import { getMyCivicConfirmations } from "@/lib/get-my-civic-confirmations";
 import { CivicMapLoader } from "@/components/CivicMapLoader";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase-client";
 
 export const Route = createFileRoute("/map")({
   head: () => ({
@@ -35,6 +37,7 @@ export const Route = createFileRoute("/map")({
 
 type CivicReport = {
   id: number;
+  submitter_id: string | null;
   created_at: string;
 
   image_url: string | null;
@@ -93,39 +96,28 @@ function MapPage() {
 
   const [confirmedReports, setConfirmedReports] =
     useState<Set<number>>(new Set());
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   /* =====================================================
-     LOAD SAVED CONFIRMATIONS
+     LOAD AUTHENTICATED USER + DATABASE CONFIRMATIONS
   ===================================================== */
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(
-        "fixmycity-confirmed-reports",
-      );
+    void supabase.auth.getSession().then(async ({ data }) => {
+      setAccessToken(data.session?.access_token ?? null);
+      setCurrentUserId(data.session?.user.id ?? null);
+      if (!data.session?.access_token) return;
 
-      if (!saved) {
-        return;
+      try {
+        const ids = await getMyCivicConfirmations({
+          data: { accessToken: data.session.access_token },
+        });
+        setConfirmedReports(new Set(ids));
+      } catch (error) {
+        console.error("Unable to load database confirmations:", error);
       }
-
-      const ids = JSON.parse(saved);
-
-      if (Array.isArray(ids)) {
-        setConfirmedReports(
-          new Set(
-            ids.filter(
-              (id): id is number =>
-                typeof id === "number",
-            ),
-          ),
-        );
-      }
-    } catch (err) {
-      console.error(
-        "Unable to load saved confirmations:",
-        err,
-      );
-    }
+    });
   }, []);
 
   /* =====================================================
@@ -243,6 +235,16 @@ function MapPage() {
         return;
       }
 
+      if (!accessToken) {
+        toast.info("Please sign in to confirm an issue.");
+        return;
+      }
+
+      if (selected.submitter_id === currentUserId) {
+        toast.info("You cannot confirm your own report.");
+        return;
+      }
+
       if (
         confirmedReports.has(
           selected.id,
@@ -262,6 +264,7 @@ function MapPage() {
           await confirmCivicReport({
             data: {
               reportId: selected.id,
+              accessToken,
             },
           });
 
@@ -281,22 +284,9 @@ function MapPage() {
           ),
         );
 
-        /*
-         * Remember confirmation in this browser
-         * to prevent repeated clicks.
-         */
         setConfirmedReports((current) => {
           const next = new Set(current);
-
           next.add(selected.id);
-
-          localStorage.setItem(
-            "fixmycity-confirmed-reports",
-            JSON.stringify(
-              Array.from(next),
-            ),
-          );
-
           return next;
         });
 
@@ -488,8 +478,7 @@ function MapPage() {
                   />
 
                   <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold">
-                    {selected.status ||
-                      "Reported"}
+                    {formatStatus(selected.status)}
                   </span>
 
                   <span className="font-mono text-xs text-muted-foreground">
@@ -557,8 +546,7 @@ function MapPage() {
                   <InfoBox
                     label="Status"
                     value={
-                      selected.status ||
-                      "Reported"
+                      formatStatus(selected.status)
                     }
                   />
 
@@ -592,6 +580,8 @@ function MapPage() {
                     disabled={
                       confirmingId ===
                         selected.id ||
+                      (currentUserId !== null &&
+                        selected.submitter_id === currentUserId) ||
                       confirmedReports.has(
                         selected.id,
                       )
@@ -628,7 +618,10 @@ function MapPage() {
                       <>
                         <Users className="h-4 w-4" />
 
-                        I see this too ·{" "}
+                        {currentUserId !== null &&
+                        selected.submitter_id === currentUserId
+                          ? "You reported this issue"
+                          : "Confirm Issue"}{" "}·{" "}
                         {selected.confirmations ??
                           0}
                       </>
@@ -768,4 +761,8 @@ function matchesFilter(
     default:
       return true;
   }
+}
+
+function formatStatus(status: string | null) {
+  return (status || "REPORTED").replace(/_/g, " ");
 }

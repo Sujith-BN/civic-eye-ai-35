@@ -152,16 +152,8 @@ function ReportPage() {
       setLongitude(lng);
       setLocationAccuracy(accuracy);
 
-      setLocation(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-      setGettingLocation(false);
+      void reverseGeocodeCurrentLocation(lat, lng, accuracy);
 
-      if (accuracy > 1000) {
-        toast.warning(
-          "Your location appears inaccurate. Please verify or enter the location manually.",
-        );
-      } else {
-        toast.success(`Location captured (±${Math.round(accuracy)}m)`);
-      }
     },
     (error) => {
       setGettingLocation(false);
@@ -180,6 +172,32 @@ function ReportPage() {
     },
   );
 };
+
+  const reverseGeocodeCurrentLocation = async (
+    lat: number,
+    lng: number,
+    accuracy: number,
+  ) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`,
+      );
+      if (!response.ok) throw new Error("Reverse geocoding failed");
+      const result = (await response.json()) as { display_name?: string };
+      setLocation(result.display_name || "Current location");
+      toast.success(`Location captured (±${Math.round(accuracy)}m)`);
+    } catch (error) {
+      console.error("Reverse geocoding failed:", error);
+      setLocation("Current location — please add a nearby street or landmark");
+      toast.warning("We found your coordinates, but could not name the address. Please add a nearby street or landmark.");
+    } finally {
+      setGettingLocation(false);
+    }
+
+    if (accuracy > 1000) {
+      toast.warning("Your location appears inaccurate. Please verify it or choose the exact point on the map.");
+    }
+  };
 
   const analyze = async () => {
     if (!file) return toast.error("Upload a photo first");
@@ -443,7 +461,7 @@ function ReportPage() {
                   setLongitude(null);
                   setLocationAccuracy(null);
                 }}
-                placeholder="Street, area, landmark…"
+                placeholder="Enter street, area, or landmark"
               />
               <Button type="button" variant="outline" onClick={useLocation} className="shrink-0">
                 <MapPin className="h-4 w-4 mr-1.5" /> Use my location
