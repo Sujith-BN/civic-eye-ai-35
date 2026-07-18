@@ -203,6 +203,17 @@ function ReportPage() {
     return;
   }
 
+  const cleanLocation = location.trim();
+
+if (cleanLocation.length < 8) {
+  toast.error("Please enter proper street, area, or landmark details");
+  return;
+}
+
+if (latitude === null || longitude === null) {
+  toast.error("Please choose the exact issue location using GPS or the map");
+  return;
+}
   setSubmitting(true);
 
   try {
@@ -226,8 +237,7 @@ function ReportPage() {
       data: {
         imageUrl: uploadResult.imageUrl,
 
-        location:
-          location || undefined,
+        location: cleanLocation,
 
         latitude:
           latitude ?? undefined,
@@ -265,9 +275,7 @@ function ReportPage() {
       },
     });
 
-    toast.success(
-      `Report submitted successfully! ID: ${result.reportId}`,
-    );
+   toast.success("Report submitted successfully!");
   } catch (error) {
     console.error(
       "Report submission failed:",

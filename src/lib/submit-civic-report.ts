@@ -5,9 +5,9 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 const SubmitReportSchema = z.object({
   imageUrl: z.string().optional(),
-  location: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  location: z.string().trim().min(8, "Proper street/area details are required"),
+  latitude: z.number(),
+  longitude: z.number(),
   description: z.string().optional(),
 
   detectedIssue: z.string().min(1),
