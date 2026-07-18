@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { uploadCivicImage } from "@/lib/upload-civic-image";
+import { useReportDraft } from "@/context/ReportDraftContext";
 import {
   useState,
   useRef,
@@ -72,25 +73,40 @@ const severityLabels: Record<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL", Severity> =
 
 
 function ReportPage() {
+  const {
+    file,
+    setFile,
+    preview,
+    setPreview,
+    location,
+    setLocation,
+    latitude,
+    setLatitude,
+    longitude,
+    setLongitude,
+    locationAccuracy,
+    setLocationAccuracy,
+    desc,
+    setDesc,
+    analysis,
+    setAnalysis,
+    report,
+    setReport,
+    lang,
+    setLang,
+    clearDraft,
+  } = useReportDraft();
+
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
-  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [location, setLocation] = useState("");
-  const [desc, setDesc] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [report, setReport] = useState(false);
-  const [lang, setLang] = useState<"en" | "kn">("en");
+  const [submitting, setSubmitting] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
+
   const analyzeImage = useServerFn(analyzeCivicImage);
   const uploadImage = useServerFn(uploadCivicImage);
   const submitReport = useServerFn(submitCivicReport);
-  const [submitting, setSubmitting] = useState(false);
-
   const handleFile = (f: File) => {
     if (!f.type.startsWith("image/")) {
       toast.error("Please upload a valid image file");
@@ -276,6 +292,7 @@ if (latitude === null || longitude === null) {
     });
 
    toast.success("Report submitted successfully!");
+  clearDraft();
   } catch (error) {
     console.error(
       "Report submission failed:",
