@@ -35,6 +35,7 @@ import type { Severity } from "@/lib/mock-data";
 import { analyzeCivicImage } from "@/lib/analyze-civic-image";
 import { submitCivicReport } from "@/lib/submit-civic-report";
 import { confirmCivicReport } from "@/lib/confirm-civic-report";
+import { translateCivicReport, supportedReportLanguages } from "@/lib/translate-civic-report";
 import { getMyCivicConfirmations } from "@/lib/get-my-civic-confirmations";
 import { LocationPickerLoader } from "@/components/LocationPickerLoader";
 import {
@@ -126,12 +127,16 @@ function ReportPage() {
   const [duplicateReport, setDuplicateReport] = useState<DuplicateReport | null>(null);
   const [confirmingDuplicate, setConfirmingDuplicate] = useState(false);
   const [confirmedDuplicate, setConfirmedDuplicate] = useState(false);
+  const [translationLanguage, setTranslationLanguage] = useState<keyof typeof supportedReportLanguages>("en");
+  const [translatedReport, setTranslatedReport] = useState<Pick<Analysis, "issue" | "safetyRisk" | "reasoning" | "department"> | null>(null);
+  const [translating, setTranslating] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
   const analyzeImage = useServerFn(analyzeCivicImage);
   const uploadImage = useServerFn(uploadCivicImage);
   const submitReport = useServerFn(submitCivicReport);
+  const translateReport = useServerFn(translateCivicReport);
   const handleFile = (f: File) => {
     if (!f.type.startsWith("image/")) {
       toast.error("Please upload a valid image file");
@@ -432,6 +437,22 @@ function ReportPage() {
     : "";
 
   const complaint = lang === "en" ? complaintEn : complaintKn;
+  const displayAnalysis = translatedReport ? { ...analysis, ...translatedReport } : analysis;
+  const displayComplaint = displayAnalysis
+    ? `To: The Commissioner, ${displayAnalysis.department}\n\nSubject: Urgent — ${displayAnalysis.issue} at ${location || "reported location"}\n\nSafety impact: ${displayAnalysis.safetyRisk}\n\nAI reasoning: ${displayAnalysis.reasoning}\n\n${desc ? `Citizen note: ${desc}\n\n` : ""}Submitted via FixMyCity Civic Intelligence Platform.`
+    : complaint;
+  const changeTranslationLanguage = async (language: keyof typeof supportedReportLanguages) => {
+    setTranslationLanguage(language);
+    if (!analysis || language === "en") { setTranslatedReport(null); return; }
+    setTranslating(true);
+    try {
+      const result = await translateReport({ data: { language, issue: analysis.issue, safetyRisk: analysis.safetyRisk, reasoning: analysis.reasoning, department: analysis.department } });
+      setTranslatedReport(result);
+    } catch (error) {
+      setTranslatedReport(null);
+      toast.error("Translation unavailable. Showing original report.");
+    } finally { setTranslating(false); }
+  };
   const shouldShowLegacyDuplicateBanner = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("legacyDuplicateBanner");
 
   return (
@@ -672,7 +693,7 @@ function ReportPage() {
                 </div>
               </div>
 
-              <h3 className="mt-4 font-display text-2xl font-bold">{analysis.issue}</h3>
+                  <h3 className="mt-4 font-display text-2xl font-bold">{displayAnalysis?.issue}</h3>
               <div className="mt-3 flex flex-wrap gap-2 items-center">
                 <SeverityBadge severity={analysis.severity} />
                 <span className="rounded-md bg-secondary px-2.5 py-0.5 text-xs font-medium">
@@ -707,7 +728,13 @@ function ReportPage() {
                 <div className="inline-flex items-center gap-2 rounded-full bg-success/15 px-3 py-1 text-xs font-semibold text-success">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Report Generated
                 </div>
-                <div className="flex gap-1 rounded-lg bg-secondary p-1">
+                <div className="min-w-44">
+                  <Label className="mb-1 block text-xs text-muted-foreground">Translate report to:</Label>
+                  <select value={translationLanguage} onChange={(event) => void changeTranslationLanguage(event.target.value as keyof typeof supportedReportLanguages)} className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm" disabled={translating}>
+                    {Object.entries(supportedReportLanguages).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                  </select>
+                </div>
+                <div className="hidden flex gap-1 rounded-lg bg-secondary p-1">
                   <button
                     onClick={() => setLang("en")}
                     className={cn(
@@ -744,7 +771,7 @@ function ReportPage() {
 
               <div className="rounded-xl border border-border bg-secondary/40 p-4 max-h-72 overflow-y-auto">
                 <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                  {complaint}
+                  {translating ? "Translating report…" : displayComplaint}
                 </pre>
               </div>
 
@@ -753,7 +780,7 @@ function ReportPage() {
                   variant="outline"
                   className="flex-1"
                   onClick={() => {
-                    navigator.clipboard.writeText(complaint);
+                    navigator.clipboard.writeText(displayComplaint);
                     toast.success("Complaint copied");
                   }}
                 >

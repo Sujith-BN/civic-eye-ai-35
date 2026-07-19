@@ -3,8 +3,12 @@ import type { User } from "@supabase/supabase-js";
 
 import { supabase } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "@tanstack/react-router";
+import { useReportDraft } from "@/context/ReportDraftContext";
 
 export function GoogleLoginButton() {
+  const navigate = useNavigate();
+  const { clearDraft } = useReportDraft();
   const [user, setUser] = useState<User | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -53,7 +57,9 @@ export function GoogleLoginButton() {
       return;
     }
 
+    clearDraft();
     setUser(null);
+    await navigate({ to: "/" });
   };
 
   // Keep SSR and the first browser render identical.
