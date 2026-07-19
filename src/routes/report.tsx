@@ -35,7 +35,16 @@ import type { Severity } from "@/lib/mock-data";
 import { analyzeCivicImage } from "@/lib/analyze-civic-image";
 import { submitCivicReport } from "@/lib/submit-civic-report";
 import { confirmCivicReport } from "@/lib/confirm-civic-report";
+import { getMyCivicConfirmations } from "@/lib/get-my-civic-confirmations";
 import { LocationPickerLoader } from "@/components/LocationPickerLoader";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/report")({
   head: () => ({
@@ -352,7 +361,15 @@ function ReportPage() {
     });
 
     if (result.is_duplicate) {
-      setConfirmedDuplicate(false);
+      try {
+        const existingConfirmations = await getMyCivicConfirmations({
+          data: { accessToken: session.access_token },
+        });
+        setConfirmedDuplicate(existingConfirmations.includes(result.report_id));
+      } catch (confirmationError) {
+        console.error("Unable to load duplicate confirmation state:", confirmationError);
+        setConfirmedDuplicate(false);
+      }
       setDuplicateReport({
         reportId: result.report_id,
         detectedIssue: result.duplicate_detected_issue,
@@ -415,10 +432,11 @@ function ReportPage() {
     : "";
 
   const complaint = lang === "en" ? complaintEn : complaintKn;
+  const shouldShowLegacyDuplicateBanner = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("legacyDuplicateBanner");
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 py-10 md:py-14">
-      {duplicateReport && (
+      {duplicateReport && shouldShowLegacyDuplicateBanner && (
         <div className="mb-6 rounded-2xl border border-warning/30 bg-warning/10 p-4 shadow-card sm:p-5" role="alert">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -441,6 +459,15 @@ function ReportPage() {
           </div>
         </div>
       )}
+      <Dialog open={duplicateReport !== null} onOpenChange={(open) => { if (!open) setDuplicateReport(null); }}>
+        {duplicateReport && <DuplicateReportDialog
+          duplicateReport={duplicateReport}
+          confirming={confirmingDuplicate}
+          alreadyConfirmed={confirmedDuplicate}
+          onConfirm={() => void confirmDuplicateReport()}
+          onCancel={() => setDuplicateReport(null)}
+        />}
+      </Dialog>
       <div className="mb-8">
         <div className="text-xs font-semibold uppercase tracking-widest text-primary">
           Report an issue
@@ -755,6 +782,63 @@ function ReportPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function DuplicateReportDialog({
+  duplicateReport,
+  confirming,
+  alreadyConfirmed,
+  onConfirm,
+  onCancel,
+}: {
+  duplicateReport: DuplicateReport;
+  confirming: boolean;
+  alreadyConfirmed: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const isResolved = (duplicateReport.status || "REPORTED").toUpperCase() === "RESOLVED";
+  const confirmationLabel = confirming
+    ? "Confirming..."
+    : alreadyConfirmed
+      ? "Already Confirmed"
+      : duplicateReport.belongsToCurrentUser
+        ? "You reported this issue"
+        : isResolved
+          ? "Resolved issues cannot be confirmed"
+          : "Confirm Existing Issue";
+
+  return (
+    <DialogContent className="max-h-[calc(100vh-2rem)] max-w-xl overflow-y-auto rounded-2xl border-warning/20 p-5 sm:p-6">
+      <DialogHeader className="pr-8 text-left">
+        <DialogTitle className="font-display text-xl sm:text-2xl">⚠️ Issue Already Reported</DialogTitle>
+        <DialogDescription className="pt-2 leading-relaxed">
+          This issue appears to have already been reported. Instead of creating a duplicate report, you can confirm the existing issue to help increase its priority.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="rounded-2xl border border-border bg-secondary/30 p-4">
+        <dl className="grid gap-4 text-sm sm:grid-cols-2">
+          <div className="sm:col-span-2"><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Existing issue</dt><dd className="mt-1 font-display text-base font-bold">{duplicateReport.detectedIssue}</dd></div>
+          <div className="sm:col-span-2"><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Location</dt><dd className="mt-1 font-medium">{duplicateReport.location || "Location unavailable"}</dd></div>
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Severity</dt><dd className="mt-1 font-semibold">{duplicateReport.severity || "Unknown"}</dd></div>
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</dt><dd className="mt-1 font-semibold">{(duplicateReport.status || "REPORTED").replace(/_/g, " ")}</dd></div>
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Confirmations</dt><dd className="mt-1 font-semibold">{duplicateReport.confirmations}</dd></div>
+        </dl>
+      </div>
+
+      <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+        <Button
+          onClick={onConfirm}
+          disabled={confirming || alreadyConfirmed || duplicateReport.belongsToCurrentUser || isResolved}
+        >
+          {confirmationLabel}
+        </Button>
+        <Button variant="outline" asChild><a href={`/map?report=${duplicateReport.reportId}`}>View Existing Issue</a></Button>
+        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }
 
