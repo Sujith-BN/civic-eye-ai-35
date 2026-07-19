@@ -7,6 +7,7 @@ const SubmitReportSchema = z.object({
   accessToken: z.string().min(1, "Authentication is required"),
 
   imageUrl: z.string().optional(),
+  imageHash: z.string().regex(/^[0-9a-f]{64}$/, "Invalid image fingerprint"),
 
   location: z
     .string()
@@ -71,8 +72,8 @@ export const submitCivicReport = createServerFn({
     }
 
     const authenticatedSupabase = getAuthenticatedSupabaseServerClient(data.accessToken);
-    const { data: result, error } = await authenticatedSupabase.rpc("submit_civic_report", {
-      p_image_url: data.imageUrl ?? null, p_location: data.location,
+    const { data: result, error } = await authenticatedSupabase.rpc("submit_civic_report_with_image_hash", {
+      p_image_url: data.imageUrl ?? null, p_image_hash: data.imageHash, p_location: data.location,
       p_latitude: data.latitude, p_longitude: data.longitude,
       p_description: data.description ?? null, p_detected_issue: data.detectedIssue,
       p_category: data.category, p_severity: data.severity,

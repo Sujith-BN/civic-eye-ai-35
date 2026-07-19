@@ -74,6 +74,7 @@ type DuplicateReport = {
   status: string | null;
   confirmations: number;
   belongsToCurrentUser: boolean;
+  isExactImage: boolean;
 };
 
 const severityLabels: Record<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL", Severity> = {
@@ -321,6 +322,7 @@ function ReportPage() {
         accessToken: session.access_token,
 
         imageUrl: uploadResult.imageUrl,
+        imageHash: uploadResult.imageHash,
 
         location: cleanLocation,
 
@@ -359,8 +361,9 @@ function ReportPage() {
         status: result.duplicate_status,
         confirmations: result.duplicate_confirmations ?? 0,
         belongsToCurrentUser: result.duplicate_submitter_id === session.user.id,
+        isExactImage: result.duplicate_match_type === "EXACT_IMAGE",
       });
-      toast.warning("This issue may already have been reported nearby.");
+      toast.warning(result.duplicate_match_type === "EXACT_IMAGE" ? "This issue appears to have already been reported." : "This issue may already have been reported nearby.");
       return;
     }
 
@@ -419,7 +422,7 @@ function ReportPage() {
         <div className="mb-6 rounded-2xl border border-warning/30 bg-warning/10 p-4 shadow-card sm:p-5" role="alert">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="font-display text-lg font-bold">⚠️ This issue may already have been reported nearby.</h2>
+              <h2 className="font-display text-lg font-bold">⚠️ {duplicateReport.isExactImage ? "This issue appears to have already been reported." : "This issue may already have been reported nearby."}</h2>
               <p className="mt-1 text-sm text-muted-foreground">We did not create a duplicate report. Your draft and image are still here.</p>
               <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                 <div><dt className="text-muted-foreground">Issue</dt><dd className="font-semibold">{duplicateReport.detectedIssue}</dd></div>

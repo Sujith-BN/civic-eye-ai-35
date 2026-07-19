@@ -20,6 +20,11 @@ export const uploadCivicImage = createServerFn({
       throw new Error("Image must be 10MB or smaller.");
     }
 
+    const imageHash = Array.from(
+      new Uint8Array(await crypto.subtle.digest("SHA-256", await image.arrayBuffer())),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+
     const extension =
       image.name.split(".").pop()?.toLowerCase() || "jpg";
 
@@ -54,5 +59,6 @@ export const uploadCivicImage = createServerFn({
 
     return {
       imageUrl: publicUrlData.publicUrl,
+      imageHash,
     };
   });
