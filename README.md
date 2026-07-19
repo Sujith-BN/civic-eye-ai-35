@@ -8,8 +8,7 @@
 
 <br>
 
-[![Live Demo](https://img.shields.io/badge/LIVE_DEMO-Launch_FixMyCity-009688?style=for-the-badge)](https://sujith-bn-civic-eye-ai-35.sujith-bn.workers.dev/)
-[![Video Demo](https://img.shields.io/badge/VIDEO_DEMO-Watch_on_YouTube-FF0000?style=for-the-badge)](https://youtu.be/CJ9JKH-F_kE)
+### 🌐 [Launch Live Application](https://sujith-bn-civic-eye-ai-35.sujith-bn.workers.dev/) &nbsp; • &nbsp; 🎥 [Watch Video Demo](https://youtu.be/CJ9JKH-F_kE)
 
 <br>
 
