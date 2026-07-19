@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import type { Severity } from "@/lib/mock-data";
 import { analyzeCivicImage } from "@/lib/analyze-civic-image";
 import { submitCivicReport } from "@/lib/submit-civic-report";
+import { confirmCivicReport } from "@/lib/confirm-civic-report";
 import { LocationPickerLoader } from "@/components/LocationPickerLoader";
 
 export const Route = createFileRoute("/report")({
@@ -63,6 +64,16 @@ type Analysis = {
   department: string;
   confidence: number;
   reasoning: string;
+};
+
+type DuplicateReport = {
+  reportId: number;
+  detectedIssue: string;
+  location: string | null;
+  severity: string | null;
+  status: string | null;
+  confirmations: number;
+  belongsToCurrentUser: boolean;
 };
 
 const severityLabels: Record<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL", Severity> = {
@@ -102,6 +113,9 @@ function ReportPage() {
   const [gettingLocation, setGettingLocation] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [duplicateReport, setDuplicateReport] = useState<DuplicateReport | null>(null);
+  const [confirmingDuplicate, setConfirmingDuplicate] = useState(false);
+  const [confirmedDuplicate, setConfirmedDuplicate] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -335,10 +349,22 @@ function ReportPage() {
       },
     });
 
-    console.log(
-      "Report submitted:",
-      result.reportId,
-    );
+    if (result.is_duplicate) {
+      setConfirmedDuplicate(false);
+      setDuplicateReport({
+        reportId: result.report_id,
+        detectedIssue: result.duplicate_detected_issue,
+        location: result.duplicate_location,
+        severity: result.duplicate_severity,
+        status: result.duplicate_status,
+        confirmations: result.duplicate_confirmations ?? 0,
+        belongsToCurrentUser: result.duplicate_submitter_id === session.user.id,
+      });
+      toast.warning("This issue may already have been reported nearby.");
+      return;
+    }
+
+    console.log("Report submitted:", result.report_id);
 
     toast.success("Report submitted successfully!");
 
@@ -358,6 +384,25 @@ function ReportPage() {
     setSubmitting(false);
   }
 };
+  const confirmDuplicateReport = async () => {
+    if (!duplicateReport) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      toast.info("Please sign in to confirm an issue.");
+      return;
+    }
+    try {
+      setConfirmingDuplicate(true);
+      const result = await confirmCivicReport({ data: { accessToken: session.access_token, reportId: duplicateReport.reportId } });
+      setDuplicateReport((current) => current ? { ...current, confirmations: result.confirmations } : null);
+      setConfirmedDuplicate(true);
+      toast.success("Thanks! Your confirmation was added.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to confirm this issue.");
+    } finally {
+      setConfirmingDuplicate(false);
+    }
+  };
   const complaintEn = analysis
     ? `To: The Commissioner, ${analysis.department}\n\nSubject: Urgent — ${analysis.issue} at ${location || "reported location"}\n\nDear Sir/Madam,\n\nI wish to bring to your urgent attention a civic issue observed at ${location || "the reported location"}. AI-assisted analysis of photographic evidence has classified this as: ${analysis.issue} (Severity: ${analysis.severity}).\n\nSafety impact: ${analysis.safetyRisk}\n\nAI reasoning: ${analysis.reasoning}\n\n${desc ? `Citizen note: ${desc}\n\n` : ""}I request immediate inspection and corrective action by the responsible department. Please treat this as a matter of public safety.\n\nSubmitted via FixMyCity Civic Intelligence Platform.`
     : "";
@@ -370,6 +415,29 @@ function ReportPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 py-10 md:py-14">
+      {duplicateReport && (
+        <div className="mb-6 rounded-2xl border border-warning/30 bg-warning/10 p-4 shadow-card sm:p-5" role="alert">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-display text-lg font-bold">⚠️ This issue may already have been reported nearby.</h2>
+              <p className="mt-1 text-sm text-muted-foreground">We did not create a duplicate report. Your draft and image are still here.</p>
+              <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                <div><dt className="text-muted-foreground">Issue</dt><dd className="font-semibold">{duplicateReport.detectedIssue}</dd></div>
+                <div><dt className="text-muted-foreground">Location</dt><dd className="font-semibold">{duplicateReport.location || "Location unavailable"}</dd></div>
+                <div><dt className="text-muted-foreground">Severity / status</dt><dd className="font-semibold">{duplicateReport.severity || "Unknown"} · {(duplicateReport.status || "REPORTED").replace(/_/g, " ")}</dd></div>
+                <div><dt className="text-muted-foreground">Confirmations</dt><dd className="font-semibold">{duplicateReport.confirmations}</dd></div>
+              </dl>
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 sm:min-w-44">
+              <Button asChild variant="outline"><a href={`/map?report=${duplicateReport.reportId}`}>View Existing Issue</a></Button>
+              {duplicateReport.belongsToCurrentUser ? <p className="text-center text-xs text-muted-foreground">You already reported this issue.</p> : (
+                <Button onClick={() => void confirmDuplicateReport()} disabled={confirmingDuplicate || confirmedDuplicate}>{confirmingDuplicate ? "Confirming..." : confirmedDuplicate ? "You confirmed this issue" : "Confirm Existing Issue"}</Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setDuplicateReport(null)}>Keep editing draft</Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="mb-8">
         <div className="text-xs font-semibold uppercase tracking-widest text-primary">
           Report an issue

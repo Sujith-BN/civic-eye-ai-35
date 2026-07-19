@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { getAuthenticatedSupabaseServerClient, getSupabaseServerClient } from "@/lib/supabase-server";
 
 const SubmitReportSchema = z.object({
   accessToken: z.string().min(1, "Authentication is required"),
@@ -13,8 +13,8 @@ const SubmitReportSchema = z.object({
     .trim()
     .min(8, "Proper street/area details are required"),
 
-  latitude: z.number(),
-  longitude: z.number(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
 
   description: z.string().optional(),
 
@@ -70,37 +70,15 @@ export const submitCivicReport = createServerFn({
       );
     }
 
-    /*
-     * user.id is now verified by Supabase.
-     */
-    const { data: report, error } = await supabase
-      .from("civic_reports")
-      .insert({
-        submitter_id: user.id,
-
-        image_url: data.imageUrl ?? null,
-
-        location: data.location,
-        latitude: data.latitude,
-        longitude: data.longitude,
-
-        description: data.description ?? null,
-
-        detected_issue: data.detectedIssue,
-        category: data.category,
-        severity: data.severity,
-
-        safety_risk: data.safetyRisk ?? null,
-        department: data.department ?? null,
-
-        confidence: data.confidence ?? null,
-        ai_reasoning: data.aiReasoning ?? null,
-
-        status: "REPORTED",
-        confirmations: 0,
-      })
-      .select("id")
-      .single();
+    const authenticatedSupabase = getAuthenticatedSupabaseServerClient(data.accessToken);
+    const { data: result, error } = await authenticatedSupabase.rpc("submit_civic_report", {
+      p_image_url: data.imageUrl ?? null, p_location: data.location,
+      p_latitude: data.latitude, p_longitude: data.longitude,
+      p_description: data.description ?? null, p_detected_issue: data.detectedIssue,
+      p_category: data.category, p_severity: data.severity,
+      p_safety_risk: data.safetyRisk ?? null, p_department: data.department ?? null,
+      p_confidence: data.confidence ?? null, p_ai_reasoning: data.aiReasoning ?? null,
+    });
 
     if (error) {
       console.error(
@@ -120,6 +98,6 @@ export const submitCivicReport = createServerFn({
 
     return {
       success: true,
-      reportId: report.id,
+      ...(Array.isArray(result) ? result[0] : result),
     };
   });

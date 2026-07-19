@@ -84,7 +84,11 @@ function MapPage() {
   const [filter, setFilter] = useState<Filter>("All");
 
   const [selectedId, setSelectedId] =
-    useState<number | null>(null);
+    useState<number | null>(() => {
+      if (typeof window === "undefined") return null;
+      const reportId = Number(new URLSearchParams(window.location.search).get("report"));
+      return Number.isSafeInteger(reportId) && reportId > 0 ? reportId : null;
+    });
 
   const [loading, setLoading] = useState(true);
 
@@ -242,6 +246,11 @@ function MapPage() {
 
       if (selected.submitter_id === currentUserId) {
         toast.info("You cannot confirm your own report.");
+        return;
+      }
+
+      if ((selected.status || "REPORTED").toUpperCase() === "RESOLVED") {
+        toast.info("Resolved reports cannot be confirmed.");
         return;
       }
 
@@ -582,6 +591,7 @@ function MapPage() {
                         selected.id ||
                       (currentUserId !== null &&
                         selected.submitter_id === currentUserId) ||
+                      (selected.status || "REPORTED").toUpperCase() === "RESOLVED" ||
                       confirmedReports.has(
                         selected.id,
                       )
